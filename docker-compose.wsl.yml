@@ -1,0 +1,30 @@
+# =============================================================================
+# WSL2 開發機專屬疊加 —— 取代 docker-compose.x86.yml，不是疊在它上面
+# =============================================================================
+# 用法：
+#   make sim COMPOSE="docker compose -f docker-compose.yml -f docker-compose.wsl.yml"
+#
+# WSL2 沒有 /dev/dri：GPU 以 /dev/dxg 出現，使用者態驅動在 /usr/lib/wsl/lib。
+# NVIDIA 在 WSL 裡只提供 CUDA，不提供 Linux 的 OpenGL/GLX，所以 x86 疊加檔的
+# `devices: /dev/dri` 會讓 sim 容器根本建不起來，而 __GLX_VENDOR_LIBRARY_NAME=nvidia
+# 也找不到驅動。算繪改走 Mesa 的 d3d12 驅動（OpenGL 4.2，滿足 Ogre2 的 3.3）。
+#
+# compose 的 devices 是合併不是覆寫，所以這份必須取代 x86 疊加檔（同 softgl 的做法）。
+# -----------------------------------------------------------------------------
+
+services:
+
+  autonomy:
+    gpus: all      # TensorRT 推論需要；nvidia-container-toolkit 在 WSL 會自動注入 /dev/dxg 與 libcuda
+
+  sim:
+    # 不用 gpus: all —— Gazebo 只需要 OpenGL，不需要 CUDA；GL 走 Mesa d3d12。
+    environment:
+      __GLX_VENDOR_LIBRARY_NAME: mesa
+      LD_LIBRARY_PATH: /usr/lib/wsl/lib
+      # 這台機器還有 Intel 內顯，明確指定 NVIDIA
+      MESA_D3D12_DEFAULT_ADAPTER_NAME: NVIDIA
+    devices:
+      - /dev/dxg:/dev/dxg
+    volumes:
+      - /usr/lib/wsl:/usr/lib/wsl:ro
